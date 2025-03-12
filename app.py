@@ -15,6 +15,10 @@ from sklearn.linear_model import ElasticNet
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.model_selection import train_test_split
 
+# Import DAGsHub and initialize it with the repository owner and repository name
+import dagshub
+dagshub.init(repo_owner='PiusSunday', repo_name='mlflow-dagshub-experimentation', mlflow=True)
+
 logging.basicConfig(level=logging.WARN)
 logger = logging.getLogger(__name__)
 
@@ -51,7 +55,16 @@ if __name__ == "__main__":
 
     alpha = float(sys.argv[1]) if len(sys.argv) > 1 else 0.5
     l1_ratio = float(sys.argv[2]) if len(sys.argv) > 2 else 0.5
+    
+    """Logs metrics, parameters, and model to MLFlow."""
+    
+    # Create an experiment name if it doesn't exist for MLFlow
+    experiment_name = "MLFlow Experimentation with DagsHub Experimentation"
+    if not mlflow.get_experiment_by_name(experiment_name):
+        mlflow.create_experiment(experiment_name)
+        mlflow.set_experiment(experiment_name)
 
+    # Log the parameters and metrics to MLFlow
     with mlflow.start_run():
         lr = ElasticNet(alpha=alpha, l1_ratio=l1_ratio, random_state=42)
         lr.fit(train_x, train_y)
@@ -74,6 +87,10 @@ if __name__ == "__main__":
         predictions = lr.predict(train_x)
         signature = infer_signature(train_x, predictions)
 
+        ## For Remote server only (DAGShub)
+        remote_server_uri = "https://dagshub.com/PiusSunday/mlflow-dagshub-experimentation.mlflow"
+        mlflow.set_tracking_uri(remote_server_uri)
+
         tracking_url_type_store = urlparse(mlflow.get_tracking_uri()).scheme
 
         # Model registry does not work with file store
@@ -83,7 +100,8 @@ if __name__ == "__main__":
             # please refer to the doc for more information:
             # https://mlflow.org/docs/latest/model-registry.html#api-workflow
             mlflow.sklearn.log_model(
-                lr, "model", registered_model_name="ElasticnetWineModel"
+                lr, "model", registered_model_name="ElasticnetWineModel",
+                input_example=train_x[:1]
             )
         else:
-            mlflow.sklearn.log_model(lr, "model")
+            mlflow.sklearn.log_model(lr, "model", input_example=train_x[:1])
